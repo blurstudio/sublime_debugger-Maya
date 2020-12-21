@@ -96,7 +96,7 @@ def debugger_send_loop():
             sys.stdout.write('Content-Length: {}\r\n\r\n'.format(len(msg)))
             sys.stdout.write(msg)
             sys.stdout.flush()
-            log('Sent to Debugger: ' + json.dumps(json.loads(msg), indent=4))
+            log('Sent to Debugger:', msg)
 
 
 def on_receive_from_debugger(message):
@@ -107,7 +107,7 @@ def on_receive_from_debugger(message):
 
     contents = json.loads(message)
 
-    log('Received from Debugger: ' + json.dumps(json.loads(message), indent=4))
+    log('Received from Debugger:', message)
 
     cmd = contents['command']
     if cmd == 'initialize':
@@ -132,7 +132,7 @@ def on_receive_from_debugger(message):
         contents['arguments'] = json.loads(new_args)
         message = json.dumps(contents)  # update contents to reflect new args
 
-        log("New attach arguments loaded: " + new_args)
+        log("New attach arguments loaded:", new_args)
 
     # Then just put the message in the maya debugging queue
     ptvsd_send_queue.put(message)
@@ -270,7 +270,7 @@ def ptvsd_send_loop():
             try:
                 ptvsd_socket.send(bytes('Content-Length: {}\r\n\r\n'.format(len(msg)), 'UTF-8'))
                 ptvsd_socket.send(bytes(msg, 'UTF-8'))
-                log('Sent to ptvsd: ' + json.dumps(json.loads(msg), indent=4))
+                log('Sent to ptvsd:', msg)
             except OSError:
                 log("Debug socket closed.")
                 break
@@ -291,9 +291,9 @@ def on_receive_from_ptvsd(message):
 
     if seq and int(seq) in processed_seqs:
         # Should only be the initialization request
-        log("Already processed, ptvsd response is: " + json.dumps(c, indent=4))
+        log("Already processed, ptvsd response is:", message)
     else:
-        log('Received from ptvsd: ' + json.dumps(c, indent=4))
+        log('Received from ptvsd:', message)
         debugger_send_queue.put(message)
 
 
@@ -301,7 +301,7 @@ if __name__ == '__main__':
     try:
         main()
     except Exception as e:
-        log(e)
+        log(str(e))
         raise e
     finally:
         attach_file.close()
