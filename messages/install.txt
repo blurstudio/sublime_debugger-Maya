@@ -1,0 +1,22 @@
+---------------------------------------------------------------
+                    DebugAdapter-MayaPython
+---------------------------------------------------------------
+
+Thanks for installing the debug adapter for running Python in 
+Maya. Please ensure you have the "Debugger" plugin installed. 
+If not, please install it and restart Sublime before continuing.
+
+
+To begin using, open a command port in Maya using the command:
+	
+	cmds.commandPort(name="localhost:7001", sourceType="mel")
+
+The hostname and port can be changed within your project 
+settings under 
+
+	settings -> debug.configurations -> maya 
+
+in the configuration named Maya Python Debugging.
+
+The host/port in the Maya Python Debugging configuration is to 
+interface with ptvsd, which is imported in Maya for debugging.
