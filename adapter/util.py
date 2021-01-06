@@ -9,8 +9,8 @@ now = datetime.now()
 #  Debugging this adapter
 debug = True
 debug_no_maya = False
-debug_file = abspath(join(dirname(__file__), 'log.txt'))
-open(debug_file, 'w+').close()  # Creates and clears the file
+log_file = abspath(join(dirname(__file__), 'log.txt'))
+open(log_file, 'w+').close()  # Creates and clears the file
 
 ptvsd_path = join(abspath(dirname(__file__)), "python")
 
@@ -23,7 +23,7 @@ def log(msg, json_msg=None):
         if json_msg:
             msg += '\n' + json.dumps(json.loads(json_msg), indent=4)
 
-        with open(debug_file, 'a+') as f:
+        with open(log_file, 'a+') as f:
             f.write('\n' + now.strftime("%Y-%m-%d %H:%M:%S") + " - " + msg + '\n')
 
 

@@ -123,8 +123,8 @@ def on_receive_from_debugger(message):
         config = contents['arguments']
         new_args = ATTACH_ARGS.format(
             dir=dirname(config['program']).replace('\\', '\\\\'),
-            hostname=config['host'],
-            port=config['port'],
+            hostname=config['ptvsdhost'],
+            port=int(config['ptvsdport']),
             filepath=config['program'].replace('\\', '\\\\')
         )
 
@@ -149,8 +149,8 @@ def attach_to_maya(contents: dict):
 
     attach_code = ATTACH_TEMPLATE.format(
         ptvsd_path=ptvsd_path,
-        hostname=config['host'],
-        port=config['port']
+        hostname=config['ptvsdhost'],
+        port=int(config['ptvsdport'])
     )
 
     run_code = RUN_TEMPLATE.format(
@@ -160,7 +160,7 @@ def attach_to_maya(contents: dict):
 
     # Connect to given host/port combo
     if not debug_no_maya:
-        maya_host, maya_port = config['maya']['host'], int(config['maya']['port'])
+        maya_host, maya_port = config['mayahost'], int(config['mayaport'])
         try:
             maya_cmd_socket.settimeout(3)
             maya_cmd_socket.connect((maya_host, maya_port))
@@ -170,9 +170,8 @@ def attach_to_maya(contents: dict):
                 
                 
                 
-                        Please run the following command in Maya and try again:
-                        cmds.commandPort(name="{host}:{port}", sourceType="mel")
-                        Note: mel isn't an error, that's how we debug!
+                    Please run the following command in Maya and try again:
+                    cmds.commandPort(name="{host}:{port}", sourceType="mel")
                 
                 """.format(host=maya_host, port=maya_port)
             )
@@ -181,7 +180,7 @@ def attach_to_maya(contents: dict):
         log('Sending attach code to Maya')
         send_code_to_maya(attach_code)
 
-        # Force a response to be able to send run code later
+        # Force a response just in case
         try:
             maya_cmd_socket.recv(100)
         except:
@@ -190,7 +189,7 @@ def attach_to_maya(contents: dict):
             log('Successfully attached to Maya')
 
     # Then start the maya debugging threads
-    run(start_debugging, ((config['host'], int(config['port'])),))
+    run(start_debugging, ((config['ptvsdhost'], int(config['ptvsdport'])),))
 
 
 def send_code_to_maya(code: str):
@@ -303,6 +302,3 @@ if __name__ == '__main__':
     except Exception as e:
         log(str(e))
         raise e
-    finally:
-        attach_file.close()
-        run_file.close()
