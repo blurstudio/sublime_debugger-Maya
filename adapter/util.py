@@ -7,10 +7,12 @@ import json
 now = datetime.now()
 
 #  Debugging this adapter
-debug = True
+debug = False
 debug_no_maya = False
 log_file = abspath(join(dirname(__file__), 'log.txt'))
-open(log_file, 'w+').close()  # Creates and clears the file
+
+if debug:
+    open(log_file, 'w+').close()  # Creates and/or clears the file
 
 ptvsd_path = join(abspath(dirname(__file__)), "python")
 
