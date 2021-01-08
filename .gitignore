@@ -128,3 +128,5 @@ dmypy.json
 # Adapter files
 adapter/__pycache__/
 adapter/log.txt
+
+sublime_debugger.json

@@ -7,7 +7,7 @@ import json
 now = datetime.now()
 
 #  Debugging this adapter
-debug = False
+debug = True
 debug_no_maya = False
 log_file = abspath(join(dirname(__file__), 'log.txt'))
 
@@ -29,8 +29,8 @@ def log(msg, json_msg=None):
             f.write('\n' + now.strftime("%Y-%m-%d %H:%M:%S") + " - " + msg + '\n')
 
 
-def run(func, args=None):
-    Timer(0.01, func, args=args).start()
+def run(func, args=None, time=0.01):
+    Timer(time, func, args=args).start()
 
 
 # --- Resources --- #

@@ -35,6 +35,7 @@ from util import *
 import socket
 import json
 import sys
+import os
 
 
 debugger_send_queue = Queue()
@@ -165,6 +166,7 @@ def attach_to_maya(contents: dict):
             maya_cmd_socket.settimeout(3)
             maya_cmd_socket.connect((maya_host, maya_port))
         except:
+            run(os._exit, (0,), 1)
             raise Exception(
                 """
                 
@@ -172,7 +174,6 @@ def attach_to_maya(contents: dict):
                 
                     Please run the following command in Maya and try again:
                     cmds.commandPort(name="{host}:{port}", sourceType="mel")
-                
                 """.format(host=maya_host, port=maya_port)
             )
 
@@ -283,10 +284,22 @@ def on_receive_from_ptvsd(message):
     c = json.loads(message)
     seq = c.get('request_seq', None)
 
-    if c.get('command', '') == 'configurationDone':
+    cmd = c.get('command', '')
+    if cmd == 'configurationDone':
         # When Debugger & ptvsd are done setting up, send the code to debug
         if not debug_no_maya:
             send_code_to_maya(run_code)
+    elif cmd == "variables":
+        # Hide the __builtins__ variable (causes errors in the debugger gui)
+        vars = c['body'].get('variables')
+        if vars:
+            toremove = []
+            for var in vars:
+                if var['name'] in ('__builtins__', '__doc__', '__file__', '__name__', '__package__'):
+                    toremove.append(var)
+            for var in toremove:
+                vars.remove(var)
+            message = json.dumps(c)
 
     if seq and int(seq) in processed_seqs:
         # Should only be the initialization request
