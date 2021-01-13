@@ -314,6 +314,7 @@ def on_receive_from_ptvsd(message):
         log("Stall detected. Sending unblocking command to ptvsd.")
         req = PAUSE_REQUEST.format(seq=inv_seq)
         ptvsd_send_queue.put(req)
+        artificial_seqs.append(inv_seq)
         inv_seq -= 1
 
         # We don't want the debugger to know ptvsd stalled, so pretend it didn't.
@@ -328,9 +329,11 @@ def on_receive_from_ptvsd(message):
         return
         
     elif c.get('event', '') == 'stopped' and c['body'].get('reason', '') == 'pause' and waiting_for_pause_event:
-        # Set waiting for pause event to false and return. Debugging can operate normally again
+        # Set waiting for pause event to false and change the reason for the stop to be a step. 
+        # Debugging can operate normally again
         waiting_for_pause_event = False
-        return
+        c['body']['reason'] = 'step'
+        message = json.dumps(c)
 
     if seq in processed_seqs:
         # Should only be the initialization request
