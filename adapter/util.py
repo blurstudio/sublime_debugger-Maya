@@ -127,3 +127,12 @@ ATTACH_ARGS = """{{
 
 EXEC_COMMAND = """python("execfile('{tmp_file_path}')")"""
 
+PAUSE_REQUEST = """{{
+    "command": "pause",
+    "arguments": {{
+        "threadId": 1
+    }},
+    "seq": {seq},
+    "type": "request"
+}}"""
+

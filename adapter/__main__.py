@@ -47,6 +47,10 @@ run_code = ""
 ptvsd_send_queue = Queue()
 ptvsd_socket: socket.socket
 
+inv_seq = 9223372036854775806  # The maximum int value in Python 2, -1  (hopefully never gets reached)
+artificial_seqs = []  # keeps track of which seqs we have sent
+waiting_for_pause_event = False
+
 
 def main():
     """
@@ -281,14 +285,17 @@ def on_receive_from_ptvsd(message):
     Handles messages going from ptvsd to the debugger
     """
 
-    c = json.loads(message)
-    seq = c.get('request_seq', None)
+    global inv_seq, artificial_seqs, waiting_for_pause_event
 
+    c = json.loads(message)
+    seq = int(c.get('request_seq', -1))  # a negative seq will never occur
     cmd = c.get('command', '')
+
     if cmd == 'configurationDone':
         # When Debugger & ptvsd are done setting up, send the code to debug
         if not debug_no_maya:
-            send_code_to_maya(run_code)
+            send_code_to_maya(run_code)      
+    
     elif cmd == "variables":
         # Hide the __builtins__ variable (causes errors in the debugger gui)
         vars = c['body'].get('variables')
@@ -300,8 +307,32 @@ def on_receive_from_ptvsd(message):
             for var in toremove:
                 vars.remove(var)
             message = json.dumps(c)
+    
+    elif c.get('event', '') == 'stopped' and c['body'].get('reason', '') == 'step':
+        # Sometimes (often) ptvsd stops on steps, for an unknown reason.
+        # Respond to this with a forced pause to put things back on track.
+        log("Stall detected. Sending unblocking command to ptvsd.")
+        req = PAUSE_REQUEST.format(seq=inv_seq)
+        ptvsd_send_queue.put(req)
+        inv_seq -= 1
 
-    if seq and int(seq) in processed_seqs:
+        # We don't want the debugger to know ptvsd stalled, so pretend it didn't.
+        return
+    
+    elif seq in artificial_seqs:
+        # Check for success, then do nothing and wait for pause event to show up
+        if c.get('success', False): 
+            waiting_for_pause_event = True
+        else:
+            log("Stall could not be recovered.")
+        return
+        
+    elif c.get('event', '') == 'stopped' and c['body'].get('reason', '') == 'pause' and waiting_for_pause_event:
+        # Set waiting for pause event to false and return. Debugging can operate normally again
+        waiting_for_pause_event = False
+        return
+
+    if seq in processed_seqs:
         # Should only be the initialization request
         log("Already processed, ptvsd response is:", message)
     else:
