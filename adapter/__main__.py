@@ -100,7 +100,7 @@ def main():
 
         except Exception as e:
             log("Failure reading stdin: " + str(e))
-            break
+            return
 
 
 def debugger_send_loop():
@@ -111,12 +111,16 @@ def debugger_send_loop():
     while True:
         msg = debugger_send_queue.get()
         if msg is None:
-            break
+            return
         else:
-            sys.stdout.write('Content-Length: {}\r\n\r\n'.format(len(msg)))
-            sys.stdout.write(msg)
-            sys.stdout.flush()
-            log('Sent to Debugger:', msg)
+            try:
+                sys.stdout.write('Content-Length: {}\r\n\r\n'.format(len(msg)))
+                sys.stdout.write(msg)
+                sys.stdout.flush()
+                log('Sent to Debugger:', msg)
+            except Exception as e:
+                log("Failure writing to stdout (normal on exit):" + str(e))
+                return
 
 
 def on_receive_from_debugger(message):
@@ -246,7 +250,7 @@ def send_code_to_maya(code: str):
 def wait_for_signal():
     """
     Waits for the signal location to exist, which means debugging is done.
-    Sends a disconnect response to debugger and deletes the signal location.
+    Deletes the signal location and prepares this adapter for disconnect.
     """
 
     global disconnecting
@@ -254,15 +258,9 @@ def wait_for_signal():
     while True:
         
         if os.path.exists(signal_location):
-            res = DISCONNECT_RESPONSE.format(
-                req_seq=last_seq,
-                seq=inv_seq,  # just an arbitrary large seq. not associated to other uses of inv_seq
-            )
-
-            debugger_send_queue.put(res)
-            os.remove(signal_location)
             log('--- FINISHED DEBUGGING ---')
 
+            os.remove(signal_location)
             run(disconnect)
 
 
@@ -321,7 +319,7 @@ def ptvsd_send_loop():
     while True:
         msg = ptvsd_send_queue.get()
         if msg is None:
-            break
+            return
         else:
             try:
                 ptvsd_socket.send(bytes('Content-Length: {}\r\n\r\n'.format(len(msg)), 'UTF-8'))
@@ -329,7 +327,7 @@ def ptvsd_send_loop():
                 log('Sent to ptvsd:', msg)
             except OSError:
                 log("Debug socket closed.")
-                break
+                return
 
 
 def on_receive_from_ptvsd(message):

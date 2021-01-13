@@ -4,8 +4,6 @@ from threading import Timer
 from datetime import datetime
 import json
 
-now = datetime.now()
-
 #  Debugging this adapter
 debug = True
 debug_no_maya = False
@@ -26,7 +24,7 @@ def log(msg, json_msg=None):
             msg += '\n' + json.dumps(json.loads(json_msg), indent=4)
 
         with open(log_file, 'a+') as f:
-            f.write('\n' + now.strftime("%Y-%m-%d %H:%M:%S") + " - " + msg + '\n')
+            f.write('\n' + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " - " + msg + '\n')
 
 
 def run(func, args=None, time=0.01):
@@ -139,13 +137,13 @@ PAUSE_REQUEST = """{{
     "type": "request"
 }}"""
 
-DISCONNECT_RESPONSE = """{{
-    "request_seq": {req_seq},
-    "body": {{}},
-    "seq": {seq},
-    "success": true,
-    "command": "disconnect",
-    "message": "",
-    "type": "response"
-}}"""
+# DISCONNECT_RESPONSE = """{{
+#     "request_seq": {req_seq},
+#     "body": {{}},
+#     "seq": {seq},
+#     "success": true,
+#     "command": "disconnect",
+#     "message": "",
+#     "type": "response"
+# }}"""
 
