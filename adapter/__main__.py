@@ -152,8 +152,8 @@ def on_receive_from_debugger(message):
         config = contents['arguments']
         new_args = ATTACH_ARGS.format(
             dir=dirname(config['program']).replace('\\', '\\\\'),
-            hostname=config['ptvsdhost'],
-            port=int(config['ptvsdport']),
+            hostname=config['ptvsd']['host'],
+            port=int(config['ptvsd']['port']),
             filepath=config['program'].replace('\\', '\\\\')
         )
 
@@ -181,8 +181,8 @@ def attach_to_maya(contents: dict):
 
     attach_code = ATTACH_TEMPLATE.format(
         ptvsd_path=ptvsd_path,
-        hostname=config['ptvsdhost'],
-        port=int(config['ptvsdport'])
+        hostname=config['ptvsd']['host'],
+        port=int(config['ptvsd']['port'])
     )
 
     run_code = RUN_TEMPLATE.format(
@@ -195,7 +195,7 @@ def attach_to_maya(contents: dict):
 
     # Connect to given host/port combo
     if not debug_no_maya:
-        maya_host, maya_port = config['mayahost'], int(config['mayaport'])
+        maya_host, maya_port = config['maya']['host'], int(config['maya']['port'])
         try:
             maya_cmd_socket.settimeout(3)
             maya_cmd_socket.connect((maya_host, maya_port))
@@ -224,7 +224,7 @@ def attach_to_maya(contents: dict):
             log('Successfully attached to Maya')
 
     # Then start the maya debugging threads
-    run(start_debugging, ((config['ptvsdhost'], int(config['ptvsdport'])),))
+    run(start_debugging, ((config['ptvsd']['host'], int(config['ptvsd']['port'])),))
 
     # And finally wait for the signal from ptvsd that debugging is done
     run(wait_for_signal)
