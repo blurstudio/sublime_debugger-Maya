@@ -14,7 +14,6 @@ import time
 adapter_type = "mayapy"  # NOTE: type name must be unique to each adapter
 package_path = dirname(abspath(__file__))
 adapter_path = join(package_path, "adapter")
-json_path = join(package_path, "sublime_debugger.json")
 
 
 # The version is only used to display in the GUI
@@ -48,8 +47,7 @@ config_snippets = [
 # The settings used by the Debugger to run the adapter.
 settings = {
     "type": adapter_type,
-    "command": ["python", adapter_path],
-    "install info": json_path,
+    "command": ["python", adapter_path]
 }
 
 # Instantiate variables needed for checking thread
