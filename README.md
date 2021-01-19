@@ -6,7 +6,7 @@ and a DAP implementation for python (ptvsd) injected into Maya.
 It intercepts a few DAP requests to establish a connection between the debugger and Maya, and 
 otherwise forwards all communications between the debugger and ptvsd normally.
 
-### Installation
+## Installation
 
 To install from repo,
 - Open Sublime
@@ -14,7 +14,7 @@ To install from repo,
 - In the "Preferences" menu, select "Browse Packages..."
 - Clone this repository into the folder opened by Sublime
 
-### Use
+## Use
 
 - Open the project you want to debug
     - If the debugger isn't open, select "Open" in the "Debugger" menu option
@@ -27,3 +27,7 @@ To install from repo,
 - Go back to Debugger -> Add or Select Configuration, and select Maya: Python Debugging
 
 The Maya Adapter should now be functional just by pressing play. It will guide you with how to connect to Maya itself.
+
+## Note
+
+Currently only tested on Windows
