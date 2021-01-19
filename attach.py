@@ -9,7 +9,6 @@ from os.path import join, abspath, dirname
 from threading import Timer
 import sublime
 import time
-import sys
 
 
 adapter_type = "mayapy"  # NOTE: type name must be unique to each adapter
@@ -54,7 +53,6 @@ settings = {
 }
 
 # Instantiate variables needed for checking thread
-timer = None
 running = False
 check_speed = 1  # number of seconds to wait between checks for adapter presence in debugger instances
 
@@ -81,6 +79,8 @@ def check_for_adapter():
 
 def plugin_loaded():
     """ Add adapter to debugger settings for it to be recognized """
+
+    # Add entry to debugger settings
     debugger_settings = sublime.load_settings('debugger.sublime-settings')
     adapters_custom = debugger_settings.get('adapters_custom', {})
 
@@ -89,20 +89,19 @@ def plugin_loaded():
     debugger_settings.set('adapters_custom', adapters_custom)
     sublime.save_settings('debugger.sublime-settings')
 
+    # Start checking thread
     global running, timer
-
     running = True
-    timer = Timer(1, check_for_adapter)
-    timer.start()
+    Timer(1, check_for_adapter).start()
 
 
 def plugin_unloaded():
-    """This is all done every unload just in case this adapter is being uninstalled"""
+    """ This is done every unload just in case this adapter is being uninstalled """
 
+    # Wait for checking thread to finish
     global running
     running = False
-
-    time.sleep(check_speed + .1)  # wait for checking thread to finish
+    time.sleep(check_speed + .1)
 
     # Remove entry from debugger settings
     debugger_settings = sublime.load_settings('debugger.sublime-settings')
