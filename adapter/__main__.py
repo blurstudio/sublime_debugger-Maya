@@ -40,7 +40,7 @@ import os
 
 
 # Globals
-signal_location = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'finished.txt')
+signal_location = join(dirname(abspath(__file__)), 'finished.txt')
 last_seq = -1
 
 debugger_send_queue = Queue()
