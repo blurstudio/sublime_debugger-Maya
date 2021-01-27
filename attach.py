@@ -6,14 +6,14 @@ This script adds the the containing package as a valid debug adapter in the Debu
 """
 
 from os.path import join, abspath, dirname
+from threading import Timer
 import sublime
-import json
+import time
 
 
-adapter_type = "mayapy"  # NOTE: type must be unique to each adapter
+adapter_type = "mayapy"  # NOTE: type name must be unique to each adapter
 package_path = dirname(abspath(__file__))
 adapter_path = join(package_path, "adapter")
-json_path = join(package_path, "sublime_debugger.json")
 
 
 # The version is only used to display in the GUI
@@ -30,41 +30,55 @@ config_snippets = [
             "type": adapter_type,
             "program": "\${file\}",
             "request": "attach",  # can only be attach or launch
-            "mayahost": "\${mayahost\}",  # The host/port over which maya commands will be sent
-            "mayaport": "\${mayaport\}",
-            "ptvsdhost": "\${ptvsdhost\}", # The host/port used to communicate with ptvsd in maya
-            "ptvsdport": "\${ptvsdport\}"
+            "maya":  # The host/port over which maya commands will be sent
+            {
+                "host": "localhost",
+                "port": 7001
+            },
+            "ptvsd":  # The host/port used to communicate with ptvsd in maya
+            {
+                "host": "localhost",
+                "port": 7002
+            },
         }
     },
 ]
 
 # The settings used by the Debugger to run the adapter.
-# Variables under "settings" will be used to fill out configurations at runtime
 settings = {
     "type": adapter_type,
-    "command": ["python", adapter_path],
-    "install info": json_path,
-    "settings": {
-        # These must all be strings.
-        # Convert them back to bools/ints in your adapter when recieved
-        "mayahost": "localhost",
-        "mayaport": "7001",
-        "ptvsdhost": "localhost",
-        "ptvsdport": "7002",
-    }
+    "command": ["python", adapter_path]
 }
 
-# Write contents to json immediately
-with open(json_path, 'w') as f:
-    json.dump({
-        "version": version,
-        "configurationSnippets": config_snippets
-    }, f)
+# Instantiate variables needed for checking thread
+running = False
+check_speed = 1  # number of seconds to wait between checks for adapter presence in debugger instances
+
+
+def check_for_adapter():
+    """
+    Gets run in a thread to inject configuration snippets and version information 
+    into adapter objects of type adapter_type in each debugger instance found
+    """
+    
+    from Debugger.modules.debugger.debugger import Debugger
+
+    while running:
+
+        time.sleep(check_speed)
+
+        for instance in Debugger.instances.values():
+            adapter = getattr(instance, "adapters", {}).get(adapter_type, None)
+            
+            if adapter and not adapter.version:
+                adapter.version = version
+                adapter.snippets = config_snippets
 
 
 def plugin_loaded():
+    """ Add adapter to debugger settings for it to be recognized """
 
-    # Add adapter to debugger settings for it to be recognized
+    # Add entry to debugger settings
     debugger_settings = sublime.load_settings('debugger.sublime-settings')
     adapters_custom = debugger_settings.get('adapters_custom', {})
 
@@ -73,9 +87,19 @@ def plugin_loaded():
     debugger_settings.set('adapters_custom', adapters_custom)
     sublime.save_settings('debugger.sublime-settings')
 
+    # Start checking thread
+    global running, timer
+    running = True
+    Timer(1, check_for_adapter).start()
+
 
 def plugin_unloaded():
-    """This is all done every unload just in case this adapter is being uninstalled"""
+    """ This is done every unload just in case this adapter is being uninstalled """
+
+    # Wait for checking thread to finish
+    global running
+    running = False
+    time.sleep(check_speed + .1)
 
     # Remove entry from debugger settings
     debugger_settings = sublime.load_settings('debugger.sublime-settings')

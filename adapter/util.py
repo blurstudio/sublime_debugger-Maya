@@ -4,10 +4,8 @@ from threading import Timer
 from datetime import datetime
 import json
 
-now = datetime.now()
-
 #  Debugging this adapter
-debug = False
+debug = True
 debug_no_maya = False
 log_file = abspath(join(dirname(__file__), 'log.txt'))
 
@@ -26,11 +24,11 @@ def log(msg, json_msg=None):
             msg += '\n' + json.dumps(json.loads(json_msg), indent=4)
 
         with open(log_file, 'a+') as f:
-            f.write('\n' + now.strftime("%Y-%m-%d %H:%M:%S") + " - " + msg + '\n')
+            f.write('\n' + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " - " + msg + '\n')
 
 
-def run(func, args=None):
-    Timer(0.01, func, args=args).start()
+def run(func, args=None, time=0.01):
+    Timer(time, func, args=args).start()
 
 
 # --- Resources --- #
@@ -38,6 +36,7 @@ def run(func, args=None):
 
 ATTACH_TEMPLATE = """
 import sys
+import os
 ptvsd_module = r"{ptvsd_path}"
 if ptvsd_module not in sys.path:
     sys.path.insert(0, ptvsd_module)
@@ -56,14 +55,16 @@ try:
     if current_directory not in sys.path:
         sys.path.insert(0, current_directory)
     
-    
     print(' --- Debugging {file_name}... --- \\n')
     if '{file_name}' not in globals().keys():
         import {file_name}
     else:
         reload({file_name})
-    
+
     print(' --- Finished debugging {file_name} --- \\n')
+
+    open("{signal_location}", "w").close()  # Create this file to let the adapter know debugging is finished
+    
 except Exception as e:
     print('Error while debugging: ' + str(e))
     raise e
@@ -126,4 +127,23 @@ ATTACH_ARGS = """{{
 }}"""
 
 EXEC_COMMAND = """python("execfile('{tmp_file_path}')")"""
+
+PAUSE_REQUEST = """{{
+    "command": "pause",
+    "arguments": {{
+        "threadId": 1
+    }},
+    "seq": {seq},
+    "type": "request"
+}}"""
+
+# DISCONNECT_RESPONSE = """{{
+#     "request_seq": {req_seq},
+#     "body": {{}},
+#     "seq": {seq},
+#     "success": true,
+#     "command": "disconnect",
+#     "message": "",
+#     "type": "response"
+# }}"""
 
