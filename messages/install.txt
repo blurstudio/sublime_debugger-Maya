@@ -1,5 +1,5 @@
 ---------------------------------------------------------------
-                    DebugAdapter-MayaPython
+                    	Debugger-Maya
 ---------------------------------------------------------------
 
 Thanks for installing the debug adapter for running Python in 
