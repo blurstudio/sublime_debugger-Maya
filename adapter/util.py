@@ -27,7 +27,7 @@ def log(msg, json_msg=None):
             f.write('\n' + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " - " + msg + '\n')
 
 
-def run(func, args=None, time=0.01):
+def run_in_new_thread(func, args=None, time=0.01):
     Timer(time, func, args=args).start()
 
 
@@ -62,8 +62,6 @@ try:
         reload({file_name})
 
     print(' --- Finished debugging {file_name} --- \\n')
-
-    open("{signal_location}", "w").close()  # Create this file to let the adapter know debugging is finished
     
 except Exception as e:
     print('Error while debugging: ' + str(e))

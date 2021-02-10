@@ -29,28 +29,26 @@ Dataflow Schematic:
 
 """
 
+from interface import DebuggerInterface
 from tempfile import gettempdir
 from queue import Queue
 from util import *
 import socket
 import json
-import time
-import sys
 import os
 
 
 # Globals
-signal_location = join(dirname(abspath(__file__)), 'finished.txt')
+interface = None
 last_seq = -1
 
-debugger_send_queue = Queue()
 processed_seqs = []
 
 maya_cmd_socket = socket.socket()
 run_code = ""
 
 ptvsd_send_queue = Queue()
-ptvsd_socket: socket.socket
+ptvsd_socket = None
 
 
 # Avoiding stalls
@@ -61,66 +59,17 @@ waiting_for_pause_event = False
 avoiding_continue_stall = False
 stashed_event = None
 
-disconnecting = False
-
 
 def main():
     """
     Starts the thread to send information to debugger, then remains in a loop
     reading messages from debugger.
     """
+    
+    global interface
 
-    if os.path.exists(signal_location):
-        os.remove(signal_location)
-
-    run(debugger_send_loop)
-
-    while True:
-        try:
-            content_length = 0
-            while True:
-                header = sys.stdin.readline()
-                if header:
-                    header = header.strip()
-                if not header:
-                    break
-                if header.startswith(CONTENT_HEADER):
-                    content_length = int(header[len(CONTENT_HEADER):])
-
-            if content_length > 0:
-                total_content = ""
-                while content_length > 0:
-                    content = sys.stdin.read(content_length)
-                    content_length -= len(content)
-                    total_content += content
-
-                if content_length == 0:
-                    message = total_content
-                    on_receive_from_debugger(message)
-
-        except Exception as e:
-            log("Failure reading stdin: " + str(e))
-            return
-
-
-def debugger_send_loop():
-    """
-    Waits for items to show in the send queue and prints them.
-    Blocks until an item is present
-    """
-    while True:
-        msg = debugger_send_queue.get()
-        if msg is None:
-            return
-        else:
-            try:
-                sys.stdout.write('Content-Length: {}\r\n\r\n'.format(len(msg)))
-                sys.stdout.write(msg)
-                sys.stdout.flush()
-                log('Sent to Debugger:', msg)
-            except Exception as e:
-                log("Failure writing to stdout (normal on exit):" + str(e))
-                return
+    interface = DebuggerInterface(on_receive=on_receive_from_debugger)
+    interface.start()
 
 
 def on_receive_from_debugger(message):
@@ -140,13 +89,13 @@ def on_receive_from_debugger(message):
     
     if cmd == 'initialize':
         # Run init request once maya connection is established and send success response to the debugger
-        debugger_send_queue.put(json.dumps(json.loads(INITIALIZE_RESPONSE)))  # load and dump to remove indents
+        interface.send(json.dumps(json.loads(INITIALIZE_RESPONSE)))  # load and dump to remove indents
         processed_seqs.append(contents['seq'])
         pass
     
     elif cmd == 'attach':
         # time to attach to maya
-        run(attach_to_maya, (contents,))
+        run_in_new_thread(attach_to_maya, (contents,))
 
         # Change arguments to valid ones for ptvsd
         config = contents['arguments']
@@ -187,8 +136,7 @@ def attach_to_maya(contents: dict):
 
     run_code = RUN_TEMPLATE.format(
         dir=dirname(config['program']),
-        file_name=split(config['program'])[1][:-3] or basename(split(config['program'])[0])[:-3],
-        signal_location=signal_location.replace('\\', '\\\\')
+        file_name=split(config['program'])[1][:-3] or basename(split(config['program'])[0])[:-3]
     )
 
     log("RUN: \n" + run_code)
@@ -200,7 +148,7 @@ def attach_to_maya(contents: dict):
             maya_cmd_socket.settimeout(3)
             maya_cmd_socket.connect((maya_host, maya_port))
         except:
-            run(os._exit, (0,), 1)
+            run_in_new_thread(os._exit, (0,), 1)
             raise Exception(
                 """
                 
@@ -224,10 +172,7 @@ def attach_to_maya(contents: dict):
             log('Successfully attached to Maya')
 
     # Then start the maya debugging threads
-    run(start_debugging, ((config['ptvsd']['host'], int(config['ptvsd']['port'])),))
-
-    # And finally wait for the signal from ptvsd that debugging is done
-    run(wait_for_signal)
+    run_in_new_thread(start_debugging, ((config['ptvsd']['host'], int(config['ptvsd']['port'])),))
 
 
 def send_code_to_maya(code: str):
@@ -247,23 +192,6 @@ def send_code_to_maya(code: str):
     maya_cmd_socket.send(cmd.encode('UTF-8'))
 
 
-def wait_for_signal():
-    """
-    Waits for the signal location to exist, which means debugging is done.
-    Deletes the signal location and prepares this adapter for disconnect.
-    """
-
-    global disconnecting
-
-    while True:
-        
-        if os.path.exists(signal_location):
-            log('--- FINISHED DEBUGGING ---')
-
-            os.remove(signal_location)
-            run(disconnect)
-
-
 def start_debugging(address):
     """
     Connects to ptvsd in Maya, then starts the threads needed to
@@ -277,7 +205,7 @@ def start_debugging(address):
 
     log("Successfully connected to Maya for debugging. Starting...")
 
-    run(ptvsd_send_loop)  # Start sending requests to ptvsd
+    run_in_new_thread(ptvsd_send_loop)  # Start sending requests to ptvsd
 
     fstream = ptvsd_socket.makefile()
 
@@ -396,10 +324,10 @@ def on_receive_from_ptvsd(message):
 
         if stashed_event:
             log('Received from ptvsd:', message)
-            debugger_send_queue.put(message)
+            interface.send(message)
 
             log('Sending stashed message:', stashed_event)
-            debugger_send_queue.put(stashed_event)
+            interface.send(stashed_event)
 
             stashed_event = None
             return
@@ -410,29 +338,7 @@ def on_receive_from_ptvsd(message):
         log("Already processed, ptvsd response is:", message)
     else:
         log('Received from ptvsd:', message)
-        debugger_send_queue.put(message)
-
-
-def disconnect():
-    """
-    Clean things up by unblocking (and killing) all threads, then exit
-    """
-
-    # Unblock and kill the send threads
-    debugger_send_queue.put(None)
-    while debugger_send_queue.qsize() != 0:
-        time.sleep(0.1)
-    
-    ptvsd_send_queue.put(None)
-    while ptvsd_send_queue.qsize() != 0:
-        time.sleep(0.1)
-
-    # Close ptvsd socket and stdin so readline() functions unblock
-    ptvsd_socket.close()
-    sys.stdin.close()
-
-    # exit all threads
-    os._exit(0)
+        interface.send(message)
 
 
 if __name__ == '__main__':
