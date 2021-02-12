@@ -6,6 +6,8 @@ Thanks for installing the debug adapter for running Python in
 Maya. Please ensure you have the "Debugger" plugin installed. 
 If not, please install it and restart Sublime before continuing.
 
+NOTE: This adapter has so far only been tested on Windows 10.
+
 
 To begin using, open a command port in Maya using the command:
 	
