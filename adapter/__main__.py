@@ -119,7 +119,7 @@ def on_receive_from_debugger(message):
     ptvsd_send_queue.put(message)
 
 
-def attach_to_maya(contents: dict):
+def attach_to_maya(contents):
     """
     Defines commands to send to Maya, establishes a connection to its commandPort,
     then sends the code to inject ptvsd
@@ -175,7 +175,7 @@ def attach_to_maya(contents: dict):
     run_in_new_thread(start_debugging, ((config['ptvsd']['host'], int(config['ptvsd']['port'])),))
 
 
-def send_code_to_maya(code: str):
+def send_code_to_maya(code):
     """
     Wraps the code string in a mel command, then sends it to Maya
     """
