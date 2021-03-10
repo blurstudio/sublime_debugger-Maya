@@ -68,10 +68,7 @@ def on_receive_from_debugger(message):
     while debugpy is being set up
     """
 
-    global last_seq, avoiding_continue_stall
-
     contents = json.loads(message)
-    last_seq = contents.get('seq')
 
     log('Received from Debugger:', message)
 
@@ -101,9 +98,6 @@ def on_receive_from_debugger(message):
         message = json.dumps(contents)  # update contents to reflect new args
 
         log("New attach arguments loaded:", new_args)
-    
-    elif cmd == 'continue':
-        avoiding_continue_stall = True
 
     # Then just put the message in the maya debugging queue
     debugpy_send_queue.put(message)
@@ -252,8 +246,6 @@ def on_receive_from_debugpy(message):
     """
     Handles messages going from debugpy to the debugger
     """
-
-    global inv_seq, artificial_seqs, waiting_for_pause_event, avoiding_continue_stall, stashed_event
 
     c = json.loads(message)
     seq = int(c.get('request_seq', -1))  # a negative seq will never occur
