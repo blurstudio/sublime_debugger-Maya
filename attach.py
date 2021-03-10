@@ -9,6 +9,7 @@ from os.path import join, abspath, dirname
 from threading import Timer
 import sublime
 import time
+import sys
 
 
 adapter_type = "mayapy"  # NOTE: type name must be unique to each adapter
@@ -30,12 +31,13 @@ config_snippets = [
             "type": adapter_type,
             "program": "\${file\}",
             "request": "attach",  # can only be attach or launch
+            "interpreter": sys.executable,
             "maya":  # The host/port over which maya commands will be sent
             {
                 "host": "localhost",
                 "port": 7001
             },
-            "ptvsd":  # The host/port used to communicate with ptvsd in maya
+            "debugpy":  # The host/port used to communicate with debugpy in maya
             {
                 "host": "localhost",
                 "port": 7002
@@ -47,7 +49,7 @@ config_snippets = [
 # The settings used by the Debugger to run the adapter.
 settings = {
     "type": adapter_type,
-    "command": ["python", adapter_path]
+    "command": [sys.executable, adapter_path]
 }
 
 # Instantiate variables needed for checking thread

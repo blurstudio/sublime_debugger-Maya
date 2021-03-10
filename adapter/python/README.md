@@ -1,1 +1,1 @@
-All credit for ptvsd package goes to Microsoft, at https://github.com/microsoft/ptvsd.
+All credit for debugpy package goes to Microsoft, at https://github.com/microsoft/debugpy.

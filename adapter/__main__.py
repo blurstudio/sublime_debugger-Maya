@@ -18,13 +18,13 @@ Dataflow Schematic:
                 debugger_send_loop()                   main() ---> on_receive_from_debugger()
                          ^                                             /          \
                          \                           -- fwd info to --          attach?
-                   fwd ptvsd response              /                                \
+                   fwd debugpy response              /                                \
                            \                     v                                  v
                             -------  start_maya_debugging()  <--- starts ---  attach_to_maya()
                                         ^           /                               \
                                         res       req                                \
                                           \      v                                   v
-                                        ptvsd (in Maya)                   injects ptvsd in Maya
+                                        debugpy (in Maya)                   injects debugpy in Maya
 
 
 """
@@ -40,24 +40,14 @@ import os
 
 # Globals
 interface = None
-last_seq = -1
 
 processed_seqs = []
 
 maya_cmd_socket = socket.socket()
 run_code = ""
 
-ptvsd_send_queue = Queue()
-ptvsd_socket = None
-
-
-# Avoiding stalls
-inv_seq = 9223372036854775806  # The maximum int value in Python 2, -1  (hopefully never gets reached)
-artificial_seqs = []  # keeps track of which seqs we have sent
-waiting_for_pause_event = False
-
-avoiding_continue_stall = False
-stashed_event = None
+debugpy_send_queue = Queue()
+debugpy_socket = None
 
 
 def main():
@@ -75,7 +65,7 @@ def main():
 def on_receive_from_debugger(message):
     """
     Intercept the initialize and attach requests from the debugger
-    while ptvsd is being set up
+    while debugpy is being set up
     """
 
     global last_seq, avoiding_continue_stall
@@ -97,12 +87,12 @@ def on_receive_from_debugger(message):
         # time to attach to maya
         run_in_new_thread(attach_to_maya, (contents,))
 
-        # Change arguments to valid ones for ptvsd
+        # Change arguments to valid ones for debugpy
         config = contents['arguments']
         new_args = ATTACH_ARGS.format(
             dir=dirname(config['program']).replace('\\', '\\\\'),
-            hostname=config['ptvsd']['host'],
-            port=int(config['ptvsd']['port']),
+            hostname=config['debugpy']['host'],
+            port=int(config['debugpy']['port']),
             filepath=config['program'].replace('\\', '\\\\')
         )
 
@@ -116,22 +106,22 @@ def on_receive_from_debugger(message):
         avoiding_continue_stall = True
 
     # Then just put the message in the maya debugging queue
-    ptvsd_send_queue.put(message)
+    debugpy_send_queue.put(message)
 
 
 def attach_to_maya(contents):
     """
     Defines commands to send to Maya, establishes a connection to its commandPort,
-    then sends the code to inject ptvsd
+    then sends the code to inject debugpy
     """
 
     global run_code
     config = contents['arguments']
 
     attach_code = ATTACH_TEMPLATE.format(
-        ptvsd_path=ptvsd_path,
-        hostname=config['ptvsd']['host'],
-        port=int(config['ptvsd']['port'])
+        debugpy_path=debugpy_path,
+        hostname=config['debugpy']['host'],
+        port=int(config['debugpy']['port'])
     )
 
     run_code = RUN_TEMPLATE.format(
@@ -172,7 +162,7 @@ def attach_to_maya(contents):
             log('Successfully attached to Maya')
 
     # Then start the maya debugging threads
-    run_in_new_thread(start_debugging, ((config['ptvsd']['host'], int(config['ptvsd']['port'])),))
+    run_in_new_thread(start_debugging, ((config['debugpy']['host'], int(config['debugpy']['port'])),))
 
 
 def send_code_to_maya(code):
@@ -194,20 +184,20 @@ def send_code_to_maya(code):
 
 def start_debugging(address):
     """
-    Connects to ptvsd in Maya, then starts the threads needed to
+    Connects to debugpy in Maya, then starts the threads needed to
     send and receive information from it
     """
 
     log("Connecting to " + address[0] + ":" + str(address[1]))
 
-    global ptvsd_socket
-    ptvsd_socket = socket.create_connection(address)
+    global debugpy_socket
+    debugpy_socket = socket.create_connection(address)
 
     log("Successfully connected to Maya for debugging. Starting...")
 
-    run_in_new_thread(ptvsd_send_loop)  # Start sending requests to ptvsd
+    run_in_new_thread(debugpy_send_loop)  # Start sending requests to debugpy
 
-    fstream = ptvsd_socket.makefile()
+    fstream = debugpy_socket.makefile()
 
     while True:
         try:
@@ -230,37 +220,37 @@ def start_debugging(address):
 
                 if content_length == 0:
                     message = total_content
-                    on_receive_from_ptvsd(message)
+                    on_receive_from_debugpy(message)
 
         except Exception as e:
-            log("Failure reading maya's ptvsd output: \n" + str(e))
-            ptvsd_socket.close()
+            log("Failure reading maya's debugpy output: \n" + str(e))
+            debugpy_socket.close()
             break
 
 
-def ptvsd_send_loop():
+def debugpy_send_loop():
     """
     The loop that waits for items to show in the send queue and prints them.
     Blocks until an item is present
     """
 
     while True:
-        msg = ptvsd_send_queue.get()
+        msg = debugpy_send_queue.get()
         if msg is None:
             return
         else:
             try:
-                ptvsd_socket.send(bytes('Content-Length: {}\r\n\r\n'.format(len(msg)), 'UTF-8'))
-                ptvsd_socket.send(bytes(msg, 'UTF-8'))
-                log('Sent to ptvsd:', msg)
+                debugpy_socket.send(bytes('Content-Length: {}\r\n\r\n'.format(len(msg)), 'UTF-8'))
+                debugpy_socket.send(bytes(msg, 'UTF-8'))
+                log('Sent to debugpy:', msg)
             except OSError:
                 log("Debug socket closed.")
                 return
 
 
-def on_receive_from_ptvsd(message):
+def on_receive_from_debugpy(message):
     """
-    Handles messages going from ptvsd to the debugger
+    Handles messages going from debugpy to the debugger
     """
 
     global inv_seq, artificial_seqs, waiting_for_pause_event, avoiding_continue_stall, stashed_event
@@ -270,74 +260,16 @@ def on_receive_from_ptvsd(message):
     cmd = c.get('command', '')
 
     if cmd == 'configurationDone':
-        # When Debugger & ptvsd are done setting up, send the code to debug
+        # When Debugger & debugpy are done setting up, send the code to debug
         if not debug_no_maya:
-            send_code_to_maya(run_code)      
-    
-    elif cmd == "variables":
-        # Hide the __builtins__ variable (causes errors in the debugger gui)
-        vars = c['body'].get('variables')
-        if vars:
-            toremove = []
-            for var in vars:
-                if var['name'] in ('__builtins__', '__doc__', '__file__', '__name__', '__package__'):
-                    toremove.append(var)
-            for var in toremove:
-                vars.remove(var)
-            message = json.dumps(c)
-    
-    elif c.get('event', '') == 'stopped' and c['body'].get('reason', '') == 'step':
-        # Sometimes (often) ptvsd stops on steps, for an unknown reason.
-        # Respond to this with a forced pause to put things back on track.
-        log("Stall detected. Sending unblocking command to ptvsd.")
-        req = PAUSE_REQUEST.format(seq=inv_seq)
-        ptvsd_send_queue.put(req)
-        artificial_seqs.append(inv_seq)
-        inv_seq -= 1
-
-        # We don't want the debugger to know ptvsd stalled, so pretend it didn't.
-        return
-    
-    elif seq in artificial_seqs:
-        # Check for success, then do nothing and wait for pause event to show up
-        if c.get('success', False): 
-            waiting_for_pause_event = True
-        else:
-            log("Stall could not be recovered.")
-        return
-        
-    elif waiting_for_pause_event and c.get('event', '') == 'stopped' and c['body'].get('reason', '') == 'pause':
-        # Set waiting for pause event to false and change the reason for the stop to be a step. 
-        # Debugging can operate normally again
-        waiting_for_pause_event = False
-        c['body']['reason'] = 'step'
-        message = json.dumps(c)
-    
-    elif avoiding_continue_stall and c.get('event', '') == 'stopped' and c['body'].get('reason', '') == 'breakpoint':
-        # temporarily hold this message to send only after the continued event is received
-        log("Temporarily stashed: ", message)
-        stashed_event = message
-        return
-    
-    elif avoiding_continue_stall and c.get('event', '') == 'continued':
-        avoiding_continue_stall = False
-
-        if stashed_event:
-            log('Received from ptvsd:', message)
-            interface.send(message)
-
-            log('Sending stashed message:', stashed_event)
-            interface.send(stashed_event)
-
-            stashed_event = None
-            return
+            send_code_to_maya(run_code)
 
     # Send responses and events to debugger
     if seq in processed_seqs:
         # Should only be the initialization request
-        log("Already processed, ptvsd response is:", message)
+        log("Already processed, debugpy response is:", message)
     else:
-        log('Received from ptvsd:', message)
+        log('Received from debugpy:', message)
         interface.send(message)
 
 
