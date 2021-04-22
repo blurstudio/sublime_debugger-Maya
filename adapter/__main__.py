@@ -58,6 +58,7 @@ def main():
     
     global interface
 
+    # Create and start the interface with the debugger
     interface = DebuggerInterface(on_receive=on_receive_from_debugger)
     interface.start()
 
@@ -68,17 +69,18 @@ def on_receive_from_debugger(message):
     while debugpy is being set up
     """
 
+    # Load message contents into a dictionary
     contents = json.loads(message)
 
     log('Received from Debugger:', message)
 
+    # Get the type of command the debugger sent
     cmd = contents['command']
     
     if cmd == 'initialize':
         # Run init request once maya connection is established and send success response to the debugger
         interface.send(json.dumps(json.loads(INITIALIZE_RESPONSE)))  # load and dump to remove indents
         processed_seqs.append(contents['seq'])
-        pass
     
     elif cmd == 'attach':
         # time to attach to maya
@@ -93,6 +95,7 @@ def on_receive_from_debugger(message):
             filepath=config['program'].replace('\\', '\\\\')
         )
 
+        # Update the message with the new arguments to then be sent to debugpy
         contents = contents.copy()
         contents['arguments'] = json.loads(new_args)
         message = json.dumps(contents)  # update contents to reflect new args
@@ -112,12 +115,16 @@ def attach_to_maya(contents):
     global run_code
     config = contents['arguments']
 
+    # Format the simulated attach response to send it back to the debugger
+    # while we set up the debugpy in the background
     attach_code = ATTACH_TEMPLATE.format(
         debugpy_path=debugpy_path,
         hostname=config['debugpy']['host'],
         port=int(config['debugpy']['port'])
     )
 
+    # Format RUN_TEMPLATE to point to the temporary
+    # file containing the code to run
     run_code = RUN_TEMPLATE.format(
         dir=dirname(config['program']),
         file_name=split(config['program'])[1][:-3] or basename(split(config['program'])[0])[:-3]
@@ -126,34 +133,28 @@ def attach_to_maya(contents):
     log("RUN: \n" + run_code)
 
     # Connect to given host/port combo
-    if not debug_no_maya:
-        maya_host, maya_port = config['maya']['host'], int(config['maya']['port'])
-        try:
-            maya_cmd_socket.settimeout(3)
-            maya_cmd_socket.connect((maya_host, maya_port))
-        except:
-            run_in_new_thread(os._exit, (0,), 1)
-            raise Exception(
-                """
-                
-                
-                
-                    Please run the following command in Maya and try again:
-                    cmds.commandPort(name="{host}:{port}", sourceType="mel")
-                """.format(host=maya_host, port=maya_port)
-            )
+    maya_host, maya_port = config['maya']['host'], int(config['maya']['port'])
+    try:
+        maya_cmd_socket.settimeout(3)
+        maya_cmd_socket.connect((maya_host, maya_port))
+    except:
+        # Raising exceptions shows the text in the Debugger's output.
+        # Raise an error to show a potential solution to this problem.
+        run_in_new_thread(os._exit, (0,), 1)
+        raise Exception(
+            """
+            
+            
+            
+                Please run the following command in Maya and try again:
+                cmds.commandPort(name="{host}:{port}", sourceType="mel")
+            """.format(host=maya_host, port=maya_port)
+        )
 
-        # then send attach code
-        log('Sending attach code to Maya')
-        send_code_to_maya(attach_code)
-
-        # Force a response just in case
-        try:
-            maya_cmd_socket.recv(128)
-        except:
-            pass
-        finally:
-            log('Successfully attached to Maya')
+    # then send attach code
+    log('Sending attach code to Maya')
+    send_code_to_maya(attach_code)
+    log('Successfully attached to Maya')
 
     # Then start the maya debugging threads
     run_in_new_thread(start_debugging, ((config['debugpy']['host'], int(config['debugpy']['port'])),))
@@ -164,14 +165,18 @@ def send_code_to_maya(code):
     Wraps the code string in a mel command, then sends it to Maya
     """
 
+    # Create a temporary file, keeping its path, and
+    # populate it with the given code to run
     filepath = join(gettempdir(), 'temp.py')
     with open(filepath, "w") as file:
         file.write(code)
 
+    # Format the mel command to execute the temporary file
     cmd = EXEC_COMMAND.format(
         tmp_file_path=filepath.replace('\\', '\\\\\\\\')
     )
 
+    # Send the code to maya through the maya socket
     log("Sending " + cmd + " to Maya")
     maya_cmd_socket.send(cmd.encode('UTF-8'))
 
@@ -184,17 +189,21 @@ def start_debugging(address):
 
     log("Connecting to " + address[0] + ":" + str(address[1]))
 
+    # Create the socket used to communicate with debugpy
     global debugpy_socket
     debugpy_socket = socket.create_connection(address)
 
     log("Successfully connected to Maya for debugging. Starting...")
 
-    run_in_new_thread(debugpy_send_loop)  # Start sending requests to debugpy
+    # Start a thread that sends requests to debugpy
+    run_in_new_thread(debugpy_send_loop)
 
     fstream = debugpy_socket.makefile()
 
     while True:
         try:
+            # Wait for the CONTENT_HEADER to show up,
+            # then get the length of the content following it
             content_length = 0
             while True:
                 header = fstream.readline()
@@ -205,6 +214,7 @@ def start_debugging(address):
                 if header.startswith(CONTENT_HEADER):
                     content_length = int(header[len(CONTENT_HEADER):])
 
+            # Read the content of the response, then call the callback
             if content_length > 0:
                 total_content = ""
                 while content_length > 0:
@@ -217,6 +227,8 @@ def start_debugging(address):
                     on_receive_from_debugpy(message)
 
         except Exception as e:
+            # Problem with socket. Close it then return
+
             log("Failure reading maya's debugpy output: \n" + str(e))
             debugpy_socket.close()
             break
@@ -229,12 +241,16 @@ def debugpy_send_loop():
     """
 
     while True:
+        # Get the first message off the queue
         msg = debugpy_send_queue.get()
         if msg is None:
+            # get() is blocking, so None means it was intentionally
+            # added to the queue to stop this loop, or that a problem occurred
             return
         else:
             try:
-                debugpy_socket.send(bytes('Content-Length: {}\r\n\r\n'.format(len(msg)), 'UTF-8'))
+                # First send the content header with the length of the message, then send the message
+                debugpy_socket.send(bytes(CONTENT_HEADER + '{}\r\n\r\n'.format(len(msg)), 'UTF-8'))
                 debugpy_socket.send(bytes(msg, 'UTF-8'))
                 log('Sent to debugpy:', msg)
             except OSError:
@@ -247,20 +263,21 @@ def on_receive_from_debugpy(message):
     Handles messages going from debugpy to the debugger
     """
 
+    # Load the message into a dictionary
     c = json.loads(message)
     seq = int(c.get('request_seq', -1))  # a negative seq will never occur
     cmd = c.get('command', '')
 
     if cmd == 'configurationDone':
         # When Debugger & debugpy are done setting up, send the code to debug
-        if not debug_no_maya:
-            send_code_to_maya(run_code)
+        send_code_to_maya(run_code)
 
     # Send responses and events to debugger
     if seq in processed_seqs:
         # Should only be the initialization request
         log("Already processed, debugpy response is:", message)
     else:
+        # Send the message normally to the debugger
         log('Received from debugpy:', message)
         interface.send(message)
 
