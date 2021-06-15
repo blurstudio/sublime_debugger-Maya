@@ -5,109 +5,19 @@ This script adds the the containing package as a valid debug adapter in the Debu
 
 """
 
-from os.path import join, abspath, dirname
-from threading import Timer
+from Debugger.modules.debugger.adapter.adapters import Adapters
+from .adapter.maya import Maya
+
 import sublime
-import time
-import sys
 
 
-adapter_type = "mayapy"  # NOTE: type name must be unique to each adapter
-package_path = dirname(abspath(__file__))
-adapter_path = join(package_path, "adapter")
-
-
-# The version is only used to display in the GUI
-version = "1.0"
-
-# You can have several configurations here depending on your adapter's offered functionalities,
-# but they all need a "label", "description", and "body"
-config_snippets = [
-    {
-        "label": "Maya: Python Debugging",
-        "description": "Run and Debug Python code in Maya",
-        "body": {
-            "name": "Maya: Python Debugging",  
-            "type": adapter_type,
-            "program": "\${file\}",
-            "request": "attach",  # can only be attach or launch
-            "interpreter": sys.executable,
-            "maya":  # The host/port over which maya commands will be sent
-            {
-                "host": "localhost",
-                "port": 7001
-            },
-            "debugpy":  # The host/port used to communicate with debugpy in maya
-            {
-                "host": "localhost",
-                "port": 7002
-            },
-        }
-    },
-]
-
-# The settings used by the Debugger to run the adapter.
-settings = {
-    "type": adapter_type,
-    "command": [sys.executable, adapter_path]
-}
-
-# Instantiate variables needed for checking thread
-running = False
-check_speed = 1  # number of seconds to wait between checks for adapter presence in debugger instances
-
-
-def check_for_adapter():
-    """
-    Gets run in a thread to inject configuration snippets and version information 
-    into adapter objects of type adapter_type in each debugger instance found
-    """
-    
-    from Debugger.modules.debugger.debugger import Debugger
-
-    while running:
-
-        time.sleep(check_speed)
-
-        for instance in Debugger.instances.values():
-            adapter = getattr(instance, "adapters", {}).get(adapter_type, None)
-            
-            if adapter and not adapter.version:
-                adapter.version = version
-                adapter.snippets = config_snippets
+if sublime.version() < '4000':
+	raise Exception('This version of the Maya adapter requires Sublime Text 4. Use the st3 branch instead.')
 
 
 def plugin_loaded():
-    """ Add adapter to debugger settings for it to be recognized """
+    """
+    Add Maya adapter to list of adapters, that way it is recognized by the debugger.
+    """
 
-    # Add entry to debugger settings
-    debugger_settings = sublime.load_settings('debugger.sublime-settings')
-    adapters_custom = debugger_settings.get('adapters_custom', {})
-
-    adapters_custom[adapter_type] = settings
-
-    debugger_settings.set('adapters_custom', adapters_custom)
-    sublime.save_settings('debugger.sublime-settings')
-
-    # Start checking thread
-    global running, timer
-    running = True
-    Timer(1, check_for_adapter).start()
-
-
-def plugin_unloaded():
-    """ This is done every unload just in case this adapter is being uninstalled """
-
-    # Wait for checking thread to finish
-    global running
-    running = False
-    time.sleep(check_speed + .1)
-
-    # Remove entry from debugger settings
-    debugger_settings = sublime.load_settings('debugger.sublime-settings')
-    adapters_custom = debugger_settings.get('adapters_custom', {})
-
-    adapters_custom.pop(adapter_type, "")
-
-    debugger_settings.set('adapters_custom', adapters_custom)
-    sublime.save_settings('debugger.sublime-settings')
+    Adapters.all.append(Maya())
