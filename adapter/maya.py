@@ -2,17 +2,16 @@
 from Debugger.modules.typecheck import *
 import Debugger.modules.debugger.adapter as adapter
 
+from posixpath import basename
 from shutil import which
 import socket
 
-from os.path import dirname, split, 
+from os.path import dirname, split, join
 from .util import debugpy_path, ATTACH_TEMPLATE, RUN_TEMPLATE, EXEC_COMMAND, log as custom_log
 from tempfile import gettempdir
 
 import threading
 import sublime
-import time
-import sys
 
 
 # This is the id of your adapter. It must be unique and match no 
@@ -68,6 +67,12 @@ class Maya(adapter.AdapterConfiguration):
 					cmds.commandPort(name="{host}:{port}", sourceType="mel")
 				""".format(host=maya_host, port=maya_port)
 			)
+		
+		# Get debugpy host/port from config
+		host = configuration['debugpy']['host']
+		if host == 'localhost':
+			host = '127.0.0.1'
+		port = int(configuration['debugpy']['port'])
 
 		# Create helper function
 		def send_to_maya(code):
@@ -100,12 +105,6 @@ class Maya(adapter.AdapterConfiguration):
 			dir=dirname(configuration['program']),
 			file_name=split(configuration['program'])[1][:-3] or basename(split(configuration['program'])[0])[:-3]
 		)
-		
-		# Get debugpy host/port from config
-		host = configuration['debugpy']['host']
-		if host == 'localhost':
-			host = '127.0.0.1'
-		port = int(configuration['debugpy']['port'])
 
 		# Set up timer to send the run code 1 sec after establishing the connection with debugpy
 		threading.Timer(1, send_to_maya, args=(run_code,))
