@@ -44,20 +44,21 @@ def run_in_new_thread(func, args=None, time=0.01):
 
 ATTACH_TEMPLATE = """
 import sys
-import os
-debugy_module = r"{debugpy_path}"
-if debugy_module not in sys.path:
-    sys.path.insert(0, debugy_module)
+debugpy_module = r"{debugpy_path}"
+if debugpy_module not in sys.path:
+    sys.path.insert(0, debugpy_module)
 
-import debugpy
+# import debugpy
+import ptvsd
 
 try:
-    debugpy.configure(python="{interpreter}")
-    debugpy.listen(("{hostname}",{port}))
-except RuntimeError:
-    x=1
-finally:
-    print("\\n\\nConnection to Sublime Debugger is active.\\n\\n")
+    # debugpy.configure(python=r"{interpreter}")
+    # debugpy.listen(("{hostname}",{port}))
+    ptvsd.enable_attach(address=("{hostname}",{port}))
+except Exception as e:
+    sys.stderr.write("\\n\\nAn error occurred while trying to connect to Sublime Text 4:\\n" + str(e))
+else:
+    sys.stderr.write("\\n\\nConnection to Sublime Debugger is active.\\n\\n")
 """
 
 # Used to run the module
