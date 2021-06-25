@@ -1,6 +1,11 @@
 
 from Debugger.modules.typecheck import *
-import Debugger.modules.debugger.adapter as adapter
+
+# This import moves around based on the Debugger version being used
+try:
+	import Debugger.modules.debugger.adapter as adapter
+except:
+	import Debugger.modules.adapters.adapter as adapter
 
 from posixpath import basename
 from shutil import which
@@ -121,6 +126,7 @@ class Maya(adapter.AdapterConfiguration):
 		"""
 		
 		# Nothing to do when installing, just return
+		# Consider notifying the user that they should open a commandPort every time they want to use this adapter
 		pass
 
 	@property
