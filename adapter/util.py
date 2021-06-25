@@ -45,7 +45,7 @@ def run_in_new_thread(func, args=None, time=0.01):
 ATTACH_TEMPLATE = """
 import sys
 import os
-debugy_module = r"{debugy_path}"
+debugy_module = r"{debugpy_path}"
 if debugy_module not in sys.path:
     sys.path.insert(0, debugy_module)
 
